@@ -383,9 +383,22 @@ kgraphicsCreateBug4208224Channel_TU102
     // UVM/CUDA may be holding the GPU locks here and the allocation may subsequently fail
     // So explicitly release GPU locks before RmVidHeapControl
     //
-    rmGpuLocksRelease(GPUS_LOCK_FLAGS_NONE, NULL);
-    bAcquireLock = NV_TRUE;
-    pRmApi = rmapiGetInterface(RMAPI_API_LOCK_INTERNAL);
+    if (rmapiLockIsOwner())
+    {
+        rmGpuLocksRelease(GPUS_LOCK_FLAGS_NONE, NULL);
+        bAcquireLock = NV_TRUE;
+        pRmApi = rmapiGetInterface(RMAPI_API_LOCK_INTERNAL);
+    }
+    else if (rmapiInRtd3PmPath())
+    {
+        pRmApi = rmapiGetInterface(RMAPI_GPU_LOCK_INTERNAL);
+    }
+    else
+    {
+        NV_PRINTF(LEVEL_ERROR, "Caller missing proper locks\n");
+        status = NV_ERR_INVALID_LOCK_STATE;
+        goto cleanup;
+    }
 
     // Create a new VAspace for channel
     portMemSet(&vaParams, 0, sizeof(NV_VASPACE_ALLOCATION_PARAMETERS));
